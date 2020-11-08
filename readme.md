@@ -1,5 +1,17 @@
 To replicate the reported matching svRNAs of SARS-CoV-2[1] that are orthologs to the ones previously reported for SARS-CoV[2], run the command:
+
 python src.py -r Data/coronavirus_MT327745.fa -q Data/three_svRNA.fa -o match_results.csv
+
+The default scores used in alignment are as follows:
+
+Match: +1, indel: -1, mismatch (other than AG and CT): -1, A/G mismatch: -0.5, C/T mismatch: -0.75
+
+To change these scores use -a (for A/G mismatch) and -c (for C/T mismatch), for example:
+
+
+python src.py -r Data/coronavirus_MT327745.fa -q Data/three_svRNA.fa -o match_results.csv -a 0.0 -c -1
+
+
 
 If you use the code of this aligner (or parts of it) please cite [1].
 

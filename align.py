@@ -909,10 +909,10 @@ def parse_query_file(seq_file):
     return all_seqs
 
 
-def align(all_ref_seqs, all_seqs):
+def align(all_ref_seqs, all_seqs, AG=-0.5, CT=-0.75):
     alphabet = set(['A', 'C', 'G', 'T', 'N', 'R', 'D', 'V', 'W', 'Y', 'S', 'H', 'X', 'F', 'Z', 'U', 'X', 'B', 'E', 'I', 'J', 'K', 'L', 'M', 'O', 'P', 'Q'])
-    scoring_matrix = build_scoring_matrix(alphabet, 1, -1, -1)
-    scoring_matrix_rev = build_scoring_matrix(alphabet, 1, -1, -1, reverse=True)
+    scoring_matrix = build_scoring_matrix(alphabet, 1, -1, -1, AG=AG, CT=CT)
+    scoring_matrix_rev = build_scoring_matrix(alphabet, 1, -1, -1, reverse=True, AG=AG, CT=CT)
 
     all_results = []
     for idx, seq in enumerate(all_seqs):
