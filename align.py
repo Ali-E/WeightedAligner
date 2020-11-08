@@ -17,7 +17,7 @@ def reverse_complement(pattern):
     return patt_rev_comp
 
 
-def build_scoring_matrix(alphabet, diag_score, off_diag_score, dash_score):
+def build_scoring_matrix(alphabet, diag_score=1, off_diag_score=-1, dash_score=-1, varying_scores=True, AG=-0.5, CT=-0.75, score_dict={}, reverse=False):
     """
     The function returns a dictionary of dictionaries as the scoring matrix.
     """
@@ -38,10 +38,17 @@ def build_scoring_matrix(alphabet, diag_score, off_diag_score, dash_score):
                 else:
                     scoring_matrix[alph][alph_2] = off_diag_score
 
-                # if (alph == 'A' and alph_2 == 'G') or (alph == 'C' and alph_2 == 'T') or (alph == 'G' and alph_2 == 'A') or (alph == 'T' and alph_2 == 'C'):
-                #     scoring_matrix[alph][alph_2] = -2
-                # else:
-                #     scoring_matrix[alph][alph_2] = off_diag_score
+                if varying_scores:
+                    if reverse:
+                        tup = (alph_2, alph)
+                    else:
+                        tup = (alph, alph_2)
+                    if tup[0] == 'G' and tup[1] == 'A':
+                        scoring_matrix[alph][alph_2] = AG
+                    if tup[0] == 'T' and tup[1] == 'C':
+                        scoring_matrix[alph][alph_2] = CT
+                    if (tup[1], tup[0]) in score_dict:
+                        scoring_matrix[alph][alph_2] = score_dict[(tup[1], tup[0])]
 
     return scoring_matrix
 
@@ -890,6 +897,69 @@ def parse_fasta(ref_file):
     return all_ref_seqs
 
 
+def parse_query_file(seq_file):
+    all_seqs = []
+    with open(seq_file) as f:
+        lines = f.readlines()
+        for idx in range(0,len(lines),2):
+            if lines[idx+1][-1] == '\n':
+                all_seqs.append((lines[idx][:-1], lines[idx+1][:-1]))
+            else:
+                all_seqs.append((lines[idx][:-1], lines[idx+1]))
+    return all_seqs
+
+
+def align(all_ref_seqs, all_seqs):
+    alphabet = set(['A', 'C', 'G', 'T', 'N', 'R', 'D', 'V', 'W', 'Y', 'S', 'H', 'X', 'F', 'Z', 'U', 'X', 'B', 'E', 'I', 'J', 'K', 'L', 'M', 'O', 'P', 'Q'])
+    scoring_matrix = build_scoring_matrix(alphabet, 1, -1, -1)
+    scoring_matrix_rev = build_scoring_matrix(alphabet, 1, -1, -1, reverse=True)
+
+    all_results = []
+    for idx, seq in enumerate(all_seqs):
+        # seen_set = set()
+        for key, ref_seq in all_ref_seqs.items():
+
+            # print('ref: ', ref_seq)
+
+            # if idx % 1000 == 0:
+            #     print(idx)
+
+            # if seq[0] in seen_set:
+            #     continue
+            # seen_set.add(seq[0])
+
+            if len(seq[1]) > len(ref_seq):
+                rev_flag = 'T'
+            else:
+                rev_flag = 'F'
+
+            try:
+                # scoring_matrix = build_scoring_matrix(alphabet, 1, -1, -1)
+                if rev_flag == 'T':
+                    align_mat = compute_fit_alignment_matrix(seq[1], ref_seq, scoring_matrix_rev)
+                    res_all = compute_fit_alignment(seq[1], ref_seq, scoring_matrix, align_mat)
+                    for res in res_all:
+                        if float(res[0])/len(ref_seq) > 0.9:
+                            print(res)
+                        all_results.append((seq[0][1:], key, float(res[0])/len(ref_seq), res[0], len(seq[1]), res[2], res[1], res[4], res[3]))
+                else:
+                    align_mat = compute_fit_alignment_matrix(ref_seq, seq[1], scoring_matrix)
+                    res_all = compute_fit_alignment(ref_seq, seq[1], scoring_matrix, align_mat)
+                    for res in res_all:
+                        if float(res[0])/len(seq[1]) > 0.9:
+                            print(res)
+                        all_results.append((seq[0][1:], key, float(res[0])/len(seq[1]), res[0], len(seq[1]), res[1], res[2], res[3], res[4]))
+            except Exception as e:
+                print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+                print(e, seq[0])
+                print(seq[1])
+
+
+    res_df = pd.DataFrame(all_results, columns=['id', 'ref_id', 'norm_score', 'raw_score', 'length', 'align_ref', 'align_seq', 'ref_end', 'seq_end'])
+    return res_df
+
+
+
 if __name__ == "__main__":
     
     # filename = sys.argv[1]
@@ -897,8 +967,6 @@ if __name__ == "__main__":
     # print(all_ref_seqs)
     # exit(0)
 
-    alphabet = set(['A', 'C', 'G', 'T', 'N', 'R', 'D', 'V', 'W', 'Y', 'S', 'H', 'X', 'F', 'Z', 'U', 'X', 'B', 'E', 'I', 'J', 'K', 'L', 'M', 'O', 'P', 'Q'])
-    scoring_matrix = build_scoring_matrix(alphabet, 1, -1, -1)
 
 
 
@@ -931,65 +999,30 @@ if __name__ == "__main__":
     all_ref_seqs = parse_fasta(ref_file)
 
     # print(ref_seq)
-    all_seqs = []
-    with open(seq_file) as f:
-        lines = f.readlines()
-        for idx in range(0,len(lines),2):
-            if lines[idx+1][-1] == '\n':
-                all_seqs.append((lines[idx][:-1], lines[idx+1][:-1]))
-            else:
-                all_seqs.append((lines[idx][:-1], lines[idx+1]))
+    all_seqs = parse_query_file(seq_file)
 
     # print('last seq: ', all_seqs[-1])
     # print(all_seqs)
     # print(all_ref_seqs)
     
 
-
-    all_results = []
-    for idx, seq in enumerate(all_seqs):
-        # seen_set = set()
-        for key, ref_seq in all_ref_seqs.items():
-
-            # print('ref: ', ref_seq)
-
-            # if idx % 1000 == 0:
-            #     print(idx)
-
-            # if seq[0] in seen_set:
-            #     continue
-            # seen_set.add(seq[0])
-
-            if len(seq[1]) > len(ref_seq):
-                rev_flag = 'T'
-            else:
-                rev_flag = 'F'
-
-            try:
-                # scoring_matrix = build_scoring_matrix(alphabet, 1, -1, -1)
-                if rev_flag == 'T':
-                    align_mat = compute_fit_alignment_matrix(seq[1], ref_seq, scoring_matrix)
-                    res_all = compute_fit_alignment(seq[1], ref_seq, scoring_matrix, align_mat)
-                    for res in res_all:
-                        if float(res[0])/len(ref_seq) > 0.9:
-                            print(res)
-                        all_results.append((seq[0][1:], key, float(res[0])/len(ref_seq), res[0], len(seq[1]), res[2], res[1], res[4], res[3]))
-                else:
-                    align_mat = compute_fit_alignment_matrix(ref_seq, seq[1], scoring_matrix)
-                    res_all = compute_fit_alignment(ref_seq, seq[1], scoring_matrix, align_mat)
-                    for res in res_all:
-                        if float(res[0])/len(seq[1]) > 0.9:
-                            print(res)
-                        all_results.append((seq[0][1:], key, float(res[0])/len(seq[1]), res[0], len(seq[1]), res[1], res[2], res[3], res[4]))
-            except Exception as e:
-                print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-                print(e, seq[0])
-                print(seq[1])
-
-
-    res_df = pd.DataFrame(all_results, columns=['id', 'ref_id', 'norm_score', 'raw_score', 'length', 'align_ref', 'align_seq', 'ref_end', 'seq_end'])
+    res_df = align(all_ref_seqs, all_seqs)
     
     res_df.to_csv(seq_file.split(".")[0] + "_" + ref_file.split("/")[1] + "_results.csv", sep='\t', index=False)
     # res_df.to_csv(ref_file.split(".")[0] + "_" + seq_file.split('.')[0] + "_results.csv", sep='\t', index=False)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
